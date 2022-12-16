@@ -84,4 +84,60 @@ public class MyltiHttpSecurityConfig {
                     .authenticationEntryPoint((request, response, authException) -> response.setStatus(401));
         }
     }
+
+    @Configuration
+    @Order(2)
+    public static class UserSecurityConfig extends WebSecurityConfigurerAdapter {
+
+        @Autowired
+        MyUserDetailsService myUserDetailsService;
+        @Autowired
+        VerificationCodeFilter verificationCodeFilter;
+        @Autowired
+        MyAuthenticationHandler.MyAuthenticationFailureHandler failureHandler;
+        @Autowired
+        MyAuthenticationHandler.MyAuthenticationSuccessHandler successHandler;
+        @Autowired
+        MyAuthenticationHandler.MyLogoutSuccessHandler logoutSuccessHandler;
+
+        //用户名和密码验证服务
+        @Override
+        protected void configure(AuthenticationManagerBuilder auth) throws Exception {
+            auth.userDetailsService(myUserDetailsService);
+        }
+
+        //忽略"/login","/verifyCode"请求，该请求不需要进入Security的拦截器
+        @Override
+        public void configure(WebSecurity web) throws Exception {
+            web.ignoring().antMatchers("/login", "/verifyCode", "/file", "/user/register", "/user/checkUsername", "/user/checkNickname");
+        }
+
+        // http请求验证和处理规则, 响应处理的配置
+        @Override
+        protected void configure(HttpSecurity http) throws Exception {
+            // 将验证码过滤器添加在用户名密码过滤器前面, aop前置通知方式
+            http.addFilterBefore(verificationCodeFilter, UsernamePasswordAuthenticationFilter.class);
+            http.authorizeRequests()
+                    .anyRequest().authenticated()
+                    .and()
+                    .formLogin()
+                    .usernameParameter("username")
+                    .passwordParameter("password")
+                    .loginPage("/login")  //自定义登录页面设置
+                    .loginProcessingUrl("/doLogin") // 点击登录后要访问的路径
+                    .successHandler(successHandler) // 成功处理
+                    .failureHandler(failureHandler) // 失败处理
+                    .permitAll()  //返回值
+                    .and()
+                    .logout() // 登出处理
+                    .logoutUrl("/logout")
+                    .logoutSuccessHandler(logoutSuccessHandler) // 登出处理
+                    .permitAll()
+                    .and()
+                    .csrf().disable()  // 关闭csrf防御方便调试
+                    // 没有认证是, 在这里处理结果, 不进行重定向到login页面
+                    .exceptionHandling()
+                    .authenticationEntryPoint((request, response, authException) -> response.setStatus(401));
+        }
+    }
 }
